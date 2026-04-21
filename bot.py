@@ -91,13 +91,12 @@ class FlashscoreMainParser:
             full_league_name = f"{country_name} - {league_name}"
             print(f"  📌 {full_league_name}")
             
-            # ✅ ИЩЕМ МАТЧИ ТОЛЬКО ВНУТРИ ЭТОЙ СЕКЦИИ
+            # ✅ ЕДИНСТВЕННОЕ ИЗМЕНЕНИЕ: ищем матчи ТОЛЬКО в этой секции
             matches_in_section = section.find_all('div', class_='event__match')
             print(f"     Найдено матчей в секции: {len(matches_in_section)}")
             
             for match in matches_in_section:
                 try:
-                    # Находим команды
                     teams_home = match.find('div', class_='event__homeParticipant')
                     teams_away = match.find('div', class_='event__awayParticipant')
                     
@@ -114,11 +113,9 @@ class FlashscoreMainParser:
                     away = away_elem.get_text(strip=True)
                     match_title = f"{home} - {away}"
                     
-                    # Время матча
                     time_elem = match.find('div', class_='event__stage--block')
                     match_time = time_elem.get_text(strip=True) if time_elem else "—"
                     
-                    # Ссылка на матч
                     link_elem = match.find('a', class_='eventRowLink')
                     if link_elem and link_elem.get('href'):
                         match_url = link_elem.get('href')
@@ -130,7 +127,7 @@ class FlashscoreMainParser:
                     matches_by_league[full_league_name].append((match_title, match_url, match_time))
                     
                 except Exception as e:
-                    print(f"    Ошибка при парсинге матча: {e}")
+                    print(f"    Ошибка: {e}")
                     continue
         
         print(f"\n✅ Найдено лиг: {len(matches_by_league)}")
