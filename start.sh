@@ -1,1 +1,1 @@
-python flashscore_parser.py
+python bot.py
