@@ -50,88 +50,94 @@ class FlashscoreMainParser:
         self.wait = WebDriverWait(self.driver, 15)
     
     def get_today_matches(self) -> Dict[str, List[Tuple[str, str, str]]]:
-        """Парсит главную страницу Flashscore"""
-        print("🌐 Загружаем главную страницу Flashscore...")
-        self.driver.get('https://www.flashscorekz.com/')
+    """Парсит главную страницу Flashscore"""
+    print("🌐 Загружаем главную страницу Flashscore...")
+    self.driver.get('https://www.flashscorekz.com/')
+    
+    try:
+        self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, "event__match")))
+        print("✅ Страница загружена")
+    except TimeoutException:
+        print("❌ Не удалось загрузить страницу")
+        return {}
+    
+    self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+    time.sleep(2)
+    
+    soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+    matches_by_league = defaultdict(list)
+    
+    # Находим все секции лиг
+    league_sections = soup.find_all('div', class_='headerLeague__wrapper')
+    print(f"\n📊 Найдено секций: {len(league_sections)}")
+    
+    for section in league_sections:
+        # Получаем название страны
+        country_name_elem = section.find('span', class_='headerLeague__category-text')
+        if not country_name_elem:
+            continue
+        country_name = country_name_elem.get_text(strip=True)
+        if not country_name or 'РЕКЛАМА' in country_name:
+            continue
         
-        try:
-            self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, "event__match")))
-            print("✅ Страница загружена")
-        except TimeoutException:
-            print("❌ Не удалось загрузить страницу")
-            return {}
+        # Получаем название лиги
+        league_name_elem = section.find('a', class_='headerLeague__title')
+        if not league_name_elem:
+            continue
+        league_name = league_name_elem.get_text(strip=True)
+        if not league_name or 'РЕКЛАМА' in league_name:
+            continue
         
-        self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(2)
+        full_league_name = f"{country_name} - {league_name}"
+        print(f"  📌 {full_league_name}")
         
-        soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-        matches_by_league = defaultdict(list)
+        # ✅ ИЩЕМ МАТЧИ ТОЛЬКО ВНУТРИ ЭТОЙ СЕКЦИИ
+        matches_in_section = section.find_all('div', class_='event__match')
+        print(f"     Найдено матчей в секции: {len(matches_in_section)}")
         
-        league_sections = soup.find_all('div', class_='headerLeague__wrapper')
-        matches_section = soup.find_all('div', class_='event__match')
-        
-        print(f"\n📊 Найдено секций: {len(league_sections)}")
-        print(f"🔍 Найдено матчей: {len(matches_section)}")
-        
-        for section in league_sections:
-            country_name_elem = section.find('span', class_='headerLeague__category-text')
-            if not country_name_elem:
-                continue
-            
-            country_name = country_name_elem.get_text(strip=True)
-            if not country_name or 'РЕКЛАМА' in country_name:
-                continue
-            
-            league_name_elem = section.find('a', class_='headerLeague__title')
-            if not league_name_elem:
-                continue
-            
-            league_name = league_name_elem.get_text(strip=True)
-            if not league_name or 'РЕКЛАМА' in league_name:
-                continue
-            
-            print(f"  📌 {country_name} - {league_name}")
-            
-            for match in matches_section:
-                try:
-                    teams_home = match.find('div', class_='event__homeParticipant')
-                    teams_away = match.find('div', class_='event__awayParticipant')
-                    
-                    if not teams_home or not teams_away:
-                        continue
-                    
-                    home_elem = teams_home.find('span', class_='wcl-name_jjfMf')
-                    away_elem = teams_away.find('span', class_='wcl-name_jjfMf')
-                    
-                    if not home_elem or not away_elem:
-                        continue
-                    
-                    home = home_elem.get_text(strip=True)
-                    away = away_elem.get_text(strip=True)
-                    match_title = f"{home} - {away}"
-                    
-                    time_elem = match.find('div', class_='event__stage--block')
-                    match_time = time_elem.get_text(strip=True) if time_elem else "—"
-                    
-                    link_elem = match.find('a', class_='eventRowLink')
-                    if link_elem and link_elem.get('href'):
-                        match_url = link_elem.get('href')
-                        if not match_url.startswith('http'):
-                            match_url = 'https://www.flashscorekz.com' + match_url
-                    else:
-                        match_url = None
-                    
-                    full_league_name = f"{country_name} - {league_name}"
-                    matches_by_league[full_league_name].append((match_title, match_url, match_time))
-                    
-                except Exception as e:
+        for match in matches_in_section:
+            try:
+                # Находим команды
+                teams_home = match.find('div', class_='event__homeParticipant')
+                teams_away = match.find('div', class_='event__awayParticipant')
+                
+                if not teams_home or not teams_away:
                     continue
-        
-        print(f"\n✅ Найдено лиг: {len(matches_by_league)}")
-        for league, matches in matches_by_league.items():
-            print(f"  🏆 {league}: {len(matches)} матчей")
-        
-        return matches_by_league
+                
+                home_elem = teams_home.find('span', class_='wcl-name_jjfMf')
+                away_elem = teams_away.find('span', class_='wcl-name_jjfMf')
+                
+                if not home_elem or not away_elem:
+                    continue
+                
+                home = home_elem.get_text(strip=True)
+                away = away_elem.get_text(strip=True)
+                match_title = f"{home} - {away}"
+                
+                # Время матча
+                time_elem = match.find('div', class_='event__stage--block')
+                match_time = time_elem.get_text(strip=True) if time_elem else "—"
+                
+                # Ссылка на матч
+                link_elem = match.find('a', class_='eventRowLink')
+                if link_elem and link_elem.get('href'):
+                    match_url = link_elem.get('href')
+                    if not match_url.startswith('http'):
+                        match_url = 'https://www.flashscorekz.com' + match_url
+                else:
+                    match_url = None
+                
+                matches_by_league[full_league_name].append((match_title, match_url, match_time))
+                
+            except Exception as e:
+                print(f"    Ошибка при парсинге матча: {e}")
+                continue
+    
+    print(f"\n✅ Найдено лиг: {len(matches_by_league)}")
+    for league, matches in matches_by_league.items():
+        print(f"  🏆 {league}: {len(matches)} матчей")
+    
+    return matches_by_league
     
     def get_match_url_by_selection(self, matches_by_league: Dict[str, List], 
                                    league_index: int, match_index: int) -> str:
