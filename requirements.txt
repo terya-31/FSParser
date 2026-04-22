@@ -61,4 +61,4 @@ websocket-client==1.8.0
 wsproto==1.2.0
 yarl==1.23.0
 fs-football-fork
-feedparser
+feedparser==6.0.10
